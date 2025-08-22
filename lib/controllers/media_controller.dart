@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:camera/camera.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../models/media_item.dart';
 import '../services/media_service.dart';
@@ -93,7 +94,7 @@ class MediaController {
 
       final XFile? photo = await _imagePicker.pickImage(
         source: ImageSource.camera,
-        imageQuality: 80,
+        imageQuality: 95, // %95 kalite - artırıldı
       );
 
       if (photo != null) {
@@ -152,6 +153,7 @@ class MediaController {
       final XFile? video = await _imagePicker.pickVideo(
         source: ImageSource.camera,
         maxDuration: const Duration(minutes: 10),
+        preferredCameraDevice: CameraDevice.rear, // Arka kamera tercih et
       );
 
       if (video != null) {
@@ -188,7 +190,9 @@ class MediaController {
         );
       }
 
-      final XFile? media = await _imagePicker.pickMedia(imageQuality: 80);
+      final XFile? media = await _imagePicker.pickMedia(
+        imageQuality: 95,
+      ); // %95 kalite - artırıldı
 
       if (media != null) {
         final MediaType type =
