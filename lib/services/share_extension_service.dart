@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'dart:async';
-import 'dart:convert';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import '../models/media_item.dart';
 import 'media_service.dart';
@@ -14,6 +13,8 @@ class ShareExtensionService {
   final MediaService _mediaService = MediaService();
   late StreamSubscription _intentDataStreamSubscription;
   bool _isProcessingInitialMedia = false;
+  bool _isProcessingStreamMedia = false;
+  final Set<String> _processedFiles = {}; // İşlenmiş dosyaları takip et
 
   // Callback function for shared content notifications
   Function(String)? onSharedContentProcessed;
@@ -36,11 +37,12 @@ class ShareExtensionService {
           .listen(
             (List<SharedMediaFile> value) {
               // Initial media işlenirken stream'den gelen verileri görmezden gel
-              if (!_isProcessingInitialMedia) {
+              if (!_isProcessingInitialMedia && !_isProcessingStreamMedia) {
                 print(
                   'Paylaşım stream\'den veri alındı: ${value.length} dosya',
                 );
-                _processSharedFiles(value);
+                _isProcessingStreamMedia = true;
+                _processSharedFiles(value, isStream: true);
               }
             },
             onError: (err) {
@@ -54,10 +56,12 @@ class ShareExtensionService {
       ReceiveSharingIntent.instance
           .getInitialMedia()
           .then((List<SharedMediaFile> value) {
-            if (value.isNotEmpty && !_isProcessingInitialMedia) {
+            if (value.isNotEmpty &&
+                !_isProcessingInitialMedia &&
+                !_isProcessingStreamMedia) {
               _isProcessingInitialMedia = true;
               print('Başlangıç paylaşım verisi alındı: ${value.length} dosya');
-              _processSharedFiles(value);
+              _processSharedFiles(value, isStream: false);
             }
             // Tell the library that we are done processing the intent.
             ReceiveSharingIntent.instance.reset();
@@ -71,8 +75,14 @@ class ShareExtensionService {
     }
   }
 
-  Future<void> _processSharedFiles(List<SharedMediaFile> sharedFiles) async {
-    print('${sharedFiles.length} dosya işleniyor...');
+  Future<void> _processSharedFiles(
+    List<SharedMediaFile> sharedFiles, {
+    bool isStream = false,
+  }) async {
+    print('${sharedFiles.length} dosya işleniyor... (isStream: $isStream)');
+
+    List<String> processedMessages = [];
+    int successfullyProcessed = 0;
 
     for (int i = 0; i < sharedFiles.length; i++) {
       final sharedFile = sharedFiles[i];
@@ -83,6 +93,13 @@ class ShareExtensionService {
         final filePath = sharedFile.path;
         if (filePath.isEmpty) {
           print('Geçersiz dosya yolu: $filePath');
+          continue;
+        }
+
+        // Dosya daha önce işlenip işlenmediğini kontrol et
+        final fileKey = '${filePath}_${sharedFile.type}';
+        if (_processedFiles.contains(fileKey)) {
+          print('Dosya zaten işlenmiş: $fileKey');
           continue;
         }
 
@@ -123,18 +140,39 @@ class ShareExtensionService {
             ),
           );
 
+          // Dosyayı işlenmiş olarak işaretle
+          _processedFiles.add(fileKey);
+          successfullyProcessed++;
+
           print('Paylaşılan dosya kaydedildi: $savedPath');
-          onSharedContentProcessed?.call(
+          processedMessages.add(
             '${fileType == MediaType.image ? 'Fotoğraf' : 'Video'} başarıyla aktarıldı',
           );
         } else {
           print('Desteklenmeyen dosya türü: ${sharedFile.type}');
-          onSharedContentProcessed?.call('Desteklenmeyen dosya türü');
+          processedMessages.add('Desteklenmeyen dosya türü');
         }
       } catch (e) {
         print('Paylaşılan dosya işlenirken hata: $e');
-        onSharedContentProcessed?.call('Dosya işlenirken hata oluştu');
+        processedMessages.add('Dosya işlenirken hata oluştu');
       }
+    }
+
+    // Tüm dosyalar işlendikten sonra tek bir callback çağrısı yap
+    if (successfullyProcessed > 0) {
+      final message = successfullyProcessed == 1
+          ? processedMessages.first
+          : '$successfullyProcessed dosya başarıyla aktarıldı';
+      onSharedContentProcessed?.call(message);
+    } else if (processedMessages.isNotEmpty) {
+      onSharedContentProcessed?.call(processedMessages.last);
+    }
+
+    // İşleme tamamlandı, flag'leri sıfırla
+    if (isStream) {
+      _isProcessingStreamMedia = false;
+    } else {
+      _isProcessingInitialMedia = false;
     }
   }
 
@@ -165,6 +203,7 @@ class ShareExtensionService {
   void dispose() {
     try {
       _intentDataStreamSubscription.cancel();
+      _processedFiles.clear(); // İşlenmiş dosyaları temizle
       print('ShareExtensionService dispose edildi');
     } catch (e) {
       print('ShareExtensionService dispose edilirken hata: $e');

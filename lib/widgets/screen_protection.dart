@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../controllers/auth_controller.dart';
+import '../controllers/media_controller.dart';
 
 class ScreenProtection extends StatefulWidget {
   final Widget child;
@@ -14,6 +15,7 @@ class ScreenProtection extends StatefulWidget {
 class _ScreenProtectionState extends State<ScreenProtection>
     with WidgetsBindingObserver {
   final AuthController _authController = AuthController();
+  final MediaController _mediaController = MediaController();
   bool _isScreenProtected = false;
   bool _needsReauthentication = false;
 
@@ -39,17 +41,32 @@ class _ScreenProtectionState extends State<ScreenProtection>
       case AppLifecycleState.paused:
       case AppLifecycleState.inactive:
         _enableScreenProtection();
-        // Arkaplana alındığında otomatik kilitle
-        _authController.lockOnBackground();
+        // Sadece ekran koruması, logout yapmıyoruz
         break;
       case AppLifecycleState.resumed:
-        // Uygulama geri geldiğinde yeniden kimlik doğrulama gerekli
-        _needsReauthentication = true;
-        _enableScreenProtection();
-        // Şifre ekranına yönlendir
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (_needsReauthentication && mounted) {
-            Navigator.of(context).pushReplacementNamed('/');
+        // MediaController'ın kamera flag'ini kontrol etmek için bekle
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (!mounted) return;
+
+          // Kamera uygulamasından geri dönüyorsak şifre isteme
+          if (_mediaController.isInCameraMode) {
+            // Kamera modunda sadece ekran korumasını kaldır
+            _disableScreenProtection();
+          } else {
+            // Auth durumunu kontrol et
+            if (!_authController.isAuthenticated) {
+              // Logout olmuş, şifre ekranına yönlendir
+              _needsReauthentication = true;
+              _enableScreenProtection();
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (_needsReauthentication && mounted) {
+                  Navigator.of(context).pushReplacementNamed('/');
+                }
+              });
+            } else {
+              // Authenticated, sadece ekran korumasını kaldır
+              _disableScreenProtection();
+            }
           }
         });
         break;

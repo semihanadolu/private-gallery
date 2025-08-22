@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -12,7 +11,9 @@ class AuthController {
       '12345678'; // 8 haneli varsayılan şifre
   bool _isAuthenticated = false;
   Timer? _autoLockTimer;
-  static const Duration _autoLockDuration = Duration(minutes: 5); // 5 dakika
+  static const Duration _autoLockDuration = Duration(
+    minutes: 3,
+  ); // 60 dakika - daha uzun süre
 
   bool get isAuthenticated => _isAuthenticated;
 
@@ -103,10 +104,9 @@ class AuthController {
     }
   }
 
-  // Arkaplana alındığında kilitle
+  // Arkaplana alındığında kilitle - artık kullanılmıyor
   void lockOnBackground() {
-    if (_isAuthenticated) {
-      logout();
-    }
+    // Bu metod artık kullanılmıyor, sadece uyumluluk için var
+    // Eski davranış: if (_isAuthenticated) logout();
   }
 }

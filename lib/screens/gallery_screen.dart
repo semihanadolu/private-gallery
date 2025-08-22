@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../controllers/auth_controller.dart';
 import '../controllers/media_controller.dart';
 import '../models/media_item.dart';
@@ -65,6 +66,45 @@ class _GalleryScreenState extends State<GalleryScreen> {
   void _logout() {
     _authController.logout();
     Navigator.of(context).pushReplacementNamed('/');
+  }
+
+  Future<void> _handlePermissionError(String errorMessage) async {
+    if (errorMessage.contains('kalıcı olarak reddedildi')) {
+      // İzin kalıcı olarak reddedildi, ayarları açma seçeneği sun
+      await showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: Colors.grey[900],
+          title: const Text(
+            'İzin Gerekli',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
+          content: Text(
+            '$errorMessage\n\nİzin vermek için ayarları açmak ister misiniz?',
+            style: const TextStyle(color: Colors.white),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('İptal'),
+            ),
+            TextButton(
+              onPressed: () async {
+                Navigator.of(context).pop();
+                await openAppSettings();
+              },
+              child: const Text(
+                'Ayarları Aç',
+                style: TextStyle(color: Colors.blue),
+              ),
+            ),
+          ],
+        ),
+      );
+    } else {
+      // Normal hata mesajını göster
+      _showErrorSnackBar(errorMessage);
+    }
   }
 
   void _showChangePasswordDialog() {
@@ -233,6 +273,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Auth kontrolü ScreenProtection'da yapılıyor, burada yapmayalım
     return GestureDetector(
       onTap: () {
         // Kullanıcı aktivitesi - timer'ı sıfırla
@@ -277,11 +318,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
               await _mediaController.takePhoto();
               _refreshGallery();
             } catch (e) {
-              String errorMessage = 'Fotoğraf çekilirken hata oluştu';
-              if (e.toString().contains('Kamera izni')) {
-                errorMessage = 'Kamera izni gerekli. Ayarlardan izin verin.';
-              }
-              _showErrorSnackBar(errorMessage);
+              await _handlePermissionError(e.toString());
             }
           },
           onVideoPressed: () async {
@@ -289,13 +326,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
               await _mediaController.recordVideo();
               _refreshGallery();
             } catch (e) {
-              String errorMessage = 'Video çekilirken hata oluştu';
-              if (e.toString().contains('Kamera izni')) {
-                errorMessage = 'Kamera izni gerekli. Ayarlardan izin verin.';
-              } else if (e.toString().contains('Mikrofon izni')) {
-                errorMessage = 'Mikrofon izni gerekli. Ayarlardan izin verin.';
-              }
-              _showErrorSnackBar(errorMessage);
+              await _handlePermissionError(e.toString());
             }
           },
           onGalleryPressed: () async {
@@ -303,11 +334,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
               await _mediaController.pickFromGallery();
               _refreshGallery();
             } catch (e) {
-              String errorMessage = 'Galeriden seçilirken hata oluştu';
-              if (e.toString().contains('Galeri izni')) {
-                errorMessage = 'Galeri izni gerekli. Ayarlardan izin verin.';
-              }
-              _showErrorSnackBar(errorMessage);
+              await _handlePermissionError(e.toString());
             }
           },
         ),
